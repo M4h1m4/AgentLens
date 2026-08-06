@@ -1,0 +1,54 @@
+{
+  "default": [
+    {
+      "title": "Grid-scale battery storage capacity doubled in 2025",
+      "url": "https://example.com/storage-2025",
+      "excerpt": "Utility-scale battery deployments reached record highs, driven by falling lithium prices.",
+      "stance": "supports"
+    },
+    {
+      "title": "Solar overtakes coal in new-build generation",
+      "url": "https://example.com/solar-coal",
+      "excerpt": "Newly commissioned solar outpaced coal for the first time across major markets.",
+      "stance": "supports"
+    },
+    {
+      "title": "Transmission bottlenecks slow renewable rollout",
+      "url": "https://example.com/transmission",
+      "excerpt": "Interconnection queues now stretch multiple years in several regions.",
+      "stance": "supports"
+    },
+    {
+      "title": "Curtailment rising as generation outpaces demand response",
+      "url": "https://example.com/curtailment",
+      "excerpt": "Operators increasingly curtail solar during midday oversupply windows.",
+      "stance": "supports"
+    },
+    {
+      "title": "Policy incentives extended through 2030",
+      "url": "https://example.com/policy-2030",
+      "excerpt": "Long-term tax credits provide investment certainty for developers.",
+      "stance": "supports"
+    }
+  ],
+  "conflict": [
+    {
+      "title": "Nuclear is essential for a reliable low-carbon grid",
+      "url": "https://example.com/pro-nuclear",
+      "excerpt": "Baseload nuclear complements intermittent renewables and stabilizes the grid.",
+      "stance": "pro"
+    },
+    {
+      "title": "Nuclear is too slow and costly to matter for decarbonization",
+      "url": "https://example.com/anti-nuclear",
+      "excerpt": "Multi-decade build times make new nuclear irrelevant to near-term targets.",
+      "stance": "con"
+    },
+    {
+      "title": "Storage plus renewables can fully replace baseload",
+      "url": "https://example.com/storage-baseload",
+      "excerpt": "Sufficient storage removes the need for any thermal baseload generation.",
+      "stance": "con"
+    }
+  ]
+}

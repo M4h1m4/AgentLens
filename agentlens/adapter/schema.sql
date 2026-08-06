@@ -1,0 +1,1 @@
+-- Replaced by Phoenix (arize-phoenix). No SQL schema needed.
