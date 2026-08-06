@@ -261,17 +261,10 @@ class TestIntakeAgent:
 
 # ── span factory for reconciler tests ─────────────────────────────────────────
 
-@pytest.fixture(scope="module")
+@pytest.fixture
 def _span_exporter():
     """OTel in-memory exporter for reconciler span tests."""
-    from opentelemetry.sdk.trace import TracerProvider
-    from opentelemetry import trace
-
     exporter = InMemorySpanExporter()
-    provider = TracerProvider()
-    from opentelemetry.sdk.trace.export import SimpleSpanProcessor
-    provider.add_span_processor(SimpleSpanProcessor(exporter))
-    trace.set_tracer_provider(provider)
     yield exporter
     exporter.clear()
 
@@ -283,9 +276,16 @@ def _make_spans(
     tools: list[str],
     framework: str = "langgraph",
 ) -> list:
-    """Create real OTel spans for reconciler tests."""
-    from opentelemetry import trace
-    tracer = trace.get_tracer("agentlens.test")
+    """Create real OTel spans for reconciler tests.
+
+    Uses a local TracerProvider so this function never fights over the
+    global OTel provider set by test_adapter.py.
+    """
+    from opentelemetry.sdk.trace import TracerProvider
+    from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+    local_provider = TracerProvider()
+    local_provider.add_span_processor(SimpleSpanProcessor(exporter))
+    tracer = local_provider.get_tracer("agentlens.test")
     exporter.clear()
 
     with tracer.start_as_current_span("agentlens.run") as root:

@@ -10,7 +10,6 @@ import pytest
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
-from opentelemetry import trace
 
 from agentlens.rag.failure_signals import (
     FailureSignal,
@@ -33,12 +32,10 @@ from agentlens.rag.mast import (
 
 # ── span factory ──────────────────────────────────────────────────────────────
 
-@pytest.fixture(scope="module")
+@pytest.fixture
 def _exporter():
+    """Fresh in-memory exporter per test — no global OTel state touched."""
     exporter = InMemorySpanExporter()
-    provider = TracerProvider()
-    provider.add_span_processor(SimpleSpanProcessor(exporter))
-    trace.set_tracer_provider(provider)
     yield exporter
     exporter.clear()
 
@@ -52,8 +49,14 @@ def _make_spans(
     loop_nodes: list[str] | None = None,      # nodes that ran twice
     framework: str = "langgraph",
 ) -> list:
-    """Create real OTel spans for RAG tests."""
-    tracer = trace.get_tracer("agentlens.rag.test")
+    """Create real OTel spans for RAG tests.
+
+    Uses a local TracerProvider so this never conflicts with the global
+    OTel provider configured by test_adapter.py.
+    """
+    local_provider = TracerProvider()
+    local_provider.add_span_processor(SimpleSpanProcessor(exporter))
+    tracer = local_provider.get_tracer("agentlens.rag.test")
     exporter.clear()
     produced = produced or {}
     loop_nodes = loop_nodes or []
