@@ -1,0 +1,18 @@
+# AgentLens local stack.
+# Phoenix provides the OTel backend + UI at http://localhost:6006
+# Run: docker compose up -d
+# Or without Docker: pip install arize-phoenix && phoenix serve
+services:
+  phoenix:
+    image: arizephoenix/phoenix:latest
+    container_name: agentlens-phoenix
+    ports:
+      - "6006:6006"   # UI + OTLP HTTP endpoint
+      - "4317:4317"   # OTLP gRPC (optional)
+    environment:
+      PHOENIX_WORKING_DIR: /phoenix
+    volumes:
+      - phoenix_data:/phoenix
+
+volumes:
+  phoenix_data:
