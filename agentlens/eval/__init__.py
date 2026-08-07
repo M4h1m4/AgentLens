@@ -27,6 +27,15 @@ from agentlens.eval.schema import (
     CriterionResult, CaseResult, EvalResult, wilson_ci,
 )
 from agentlens.eval.store import EvalStore
+from agentlens.eval.seeded_suite import (
+    StateInspectingExecutor,
+    PatternJudgeLLM,
+    make_context_loss_suite,
+    make_delegation_loop_suite,
+    make_race_condition_suite,
+    make_contradiction_suite,
+    make_context_bleed_suite,
+)
 
 __all__ = [
     "EvalRunner",
@@ -40,4 +49,11 @@ __all__ = [
     "wilson_ci",
     "check_criterion",
     "check_all_criteria",
+    "StateInspectingExecutor",
+    "PatternJudgeLLM",
+    "make_context_loss_suite",
+    "make_delegation_loop_suite",
+    "make_race_condition_suite",
+    "make_contradiction_suite",
+    "make_context_bleed_suite",
 ]
