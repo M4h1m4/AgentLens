@@ -132,7 +132,7 @@ def test_clean_config_has_no_failures():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 from agentlens.eval import EvalRunner
-from agentlens.eval.seeded_suite import (
+from reference_agent_helpers import (
     PatternJudgeLLM,
     StateInspectingExecutor,
     make_context_bleed_suite,

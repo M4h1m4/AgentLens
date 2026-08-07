@@ -8,8 +8,17 @@ Public API::
         EvalStore, wilson_ci,
     )
 
-    # Run a benchmark suite against the agent (in-process)
-    executor = InProcessExecutor(app=build_graph(config), exporter=exporter)
+    # Run a benchmark suite against any LangGraph agent (in-process)
+    exporter = InMemorySpanExporter()
+    setup_otel(exporter=exporter)
+    instrument_langchain()
+
+    executor = InProcessExecutor(
+        app=build_graph(config),
+        exporter=exporter,
+        output_key="report",
+        extra_initial_state={"loop_count": 0},  # agent-specific fields only
+    )
     runner = EvalRunner(executor=executor)
     result = runner.run(suite)
 
@@ -27,15 +36,6 @@ from agentlens.eval.schema import (
     CriterionResult, CaseResult, EvalResult, wilson_ci,
 )
 from agentlens.eval.store import EvalStore
-from agentlens.eval.seeded_suite import (
-    StateInspectingExecutor,
-    PatternJudgeLLM,
-    make_context_loss_suite,
-    make_delegation_loop_suite,
-    make_race_condition_suite,
-    make_contradiction_suite,
-    make_context_bleed_suite,
-)
 
 __all__ = [
     "EvalRunner",
@@ -49,11 +49,4 @@ __all__ = [
     "wilson_ci",
     "check_criterion",
     "check_all_criteria",
-    "StateInspectingExecutor",
-    "PatternJudgeLLM",
-    "make_context_loss_suite",
-    "make_delegation_loop_suite",
-    "make_race_condition_suite",
-    "make_contradiction_suite",
-    "make_context_bleed_suite",
 ]

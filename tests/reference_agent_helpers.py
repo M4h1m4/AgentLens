@@ -1,13 +1,15 @@
-"""Day 7 — Seeded failure verification: executor and benchmark suite factories.
+"""Reference-agent-specific test helpers — NOT part of the AgentLens public API.
 
-StateInspectingExecutor runs the real reference agent (with a fake LLM) and
-converts the final state into synthetic spans — no global OTel required. The
-EvalRunner uses it to verify that criterion checking catches each seeded
-failure without a live API key or OTel backend.
+This module contains test scaffolding that is specific to the reference agent
+used to validate AgentLens. Nothing in this file should be imported from the
+agentlens package itself. Any agent-agnostic utilities live in agentlens/eval/.
 
-PatternJudgeLLM is a fake structured LLM judge that evaluates output content
-via deterministic string patterns, one-for-one against the five seeded failure
-criteria so tests stay reproducible.
+  StateInspectingExecutor  — runs the reference agent directly and converts
+                             final state to synthetic spans. Avoids global OTel.
+  PatternJudgeLLM          — fake judge that checks reference-agent output
+                             patterns (e.g. "## Supporting evidence").
+  make_*_suite()           — benchmark suite factories targeting the five
+                             seeded failures in the reference agent.
 """
 
 from __future__ import annotations
