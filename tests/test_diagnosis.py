@@ -110,9 +110,14 @@ class _FakeLibrary:
         return self._signals[:k]
 
 
-def _signal(summary: str, diagnosis: str | None = None) -> FailureSignal:
+def _signal(
+    summary: str,
+    diagnosis: str | None = None,
+    pass_rate_delta: float | None = None,
+) -> FailureSignal:
     sig = FailureSignal(trace_id="past-1", session_id="test", summary=summary)
     sig.diagnosis = diagnosis
+    sig.pass_rate_delta = pass_rate_delta
     return sig
 
 
@@ -370,7 +375,8 @@ class TestLibraryIntegration:
         assert diag.similar_past_count == 0
 
     def test_library_count_reflected_in_diagnosis(self):
-        signals = [_signal(f"past failure {i}") for i in range(3)]
+        # Signals must have pass_rate_delta > 0 to survive D8.2 filtering.
+        signals = [_signal(f"past failure {i}", pass_rate_delta=0.3) for i in range(3)]
         result = _eval_result([_case("context_loss")])
         agent = DiagnosisAgent(
             structured_llm=_FakeLLM(),
@@ -381,8 +387,10 @@ class TestLibraryIntegration:
         assert diag.similar_past_count == 3
 
     def test_retrieve_k_limits_signals(self):
-        """retrieve_k=2 means at most 2 signals returned even if library has more."""
-        signals = [_signal(f"signal {i}") for i in range(10)]
+        """retrieve_k=2 means at most 2 proven signals reach the LLM (D8.2 cap)."""
+        # All 10 signals have pass_rate_delta > 0 so none are filtered by D8.2.
+        # The k=2 cap then limits to 2.
+        signals = [_signal(f"signal {i}", pass_rate_delta=0.2) for i in range(10)]
         result = _eval_result([_case("delegation_loop")])
         agent = DiagnosisAgent(
             structured_llm=_FakeLLM(),
@@ -390,6 +398,20 @@ class TestLibraryIntegration:
             retrieve_k=2,
         )
         [diag] = agent.diagnose(result)
+        assert diag.similar_past_count == 2
+
+    def test_unproven_signals_excluded_from_count(self):
+        """D8.2: signals without a confirmed fix (pass_rate_delta <= 0) are excluded."""
+        proven = [_signal(f"proven {i}", pass_rate_delta=0.25) for i in range(2)]
+        unresolved = [_signal(f"unresolved {i}") for i in range(5)]  # no delta
+        result = _eval_result([_case("context_loss")])
+        agent = DiagnosisAgent(
+            structured_llm=_FakeLLM(),
+            library=_FakeLibrary(proven + unresolved),
+            retrieve_k=10,
+        )
+        [diag] = agent.diagnose(result)
+        # Only the 2 proven signals count; the 5 unresolved are filtered out.
         assert diag.similar_past_count == 2
 
     def test_library_failure_degrades_gracefully(self):
