@@ -337,3 +337,63 @@ The ImprovementAgent returns variant_files (the modified code) and an Improvemen
 **D9.5 — ExecutorConfig decouples variant execution from agent construction**
 
 Variant runs use SandboxExecutor (E2B) rather than InProcessExecutor. Unreviewed LLM-generated code must run in an isolated sandbox. The caller provides an ExecutorConfig (agent_dir, import_lines, build_app_expr, etc.) so the ImprovementAgent can spin up a fresh SandboxExecutor for each variant without knowing how to construct the agent beyond those config values.
+
+---
+
+## Day 8+9 — Failure Library and Diagnosis Accuracy
+
+**D8.1 — Overwrite weak diagnosis with proven hypothesis after promotion.**
+
+When the Improvement Agent promotes a fix, the original Diagnosis Agent hypothesis is
+replaced in ChromaDB with the Improvement Agent's winning hypothesis — not stored
+alongside it.
+
+Rationale: the Diagnosis Agent produces a hypothesis before the fix is proven. The
+Improvement Agent empirically validates what actually caused the failure. Storing both
+creates a contradiction in the failure library: the weak original hypothesis and the
+proven fix coexist, and future Diagnosis Agents may reason from the weak hypothesis
+rather than the ground truth.
+
+The correct ground truth for a fixed failure is: "what the Improvement Agent's winning
+hypothesis said caused it." The pipeline orchestrator (Day 11 CLI) is responsible for
+calling `library.update_diagnosis()` with the Improvement Agent's winning hypothesis
+as the new diagnosis string, not the Diagnosis Agent's original weak hypothesis.
+
+Implementation: in the Day 11 pipeline orchestrator, after `improvement_result.promoted
+== True`:
+
+```python
+library.update_diagnosis(
+    trace_id=trace_id,
+    diagnosis=improvement_result.hypothesis,   # proven ground truth, not weak hypothesis
+    fix_applied=improvement_result.hypothesis,
+    pass_rate_delta=improvement_result.variant_eval.pass_rate
+                    - improvement_result.baseline_eval.pass_rate,
+)
+```
+
+**D8.2 — Weight retrieved failures by pass_rate_delta, exclude unresolved ones.**
+
+When the Diagnosis Agent retrieves similar past failures from ChromaDB, it must not
+treat all retrieved signals equally. Failures where no fix was found (pass_rate_delta
+= 0 or None) are noise — they show a failure pattern but provide no actionable evidence.
+
+The pipeline sorts retrieved signals by pass_rate_delta descending and passes only the
+top signals where a fix was confirmed (pass_rate_delta > 0) to the Diagnosis Agent's
+context. Signals with no proven fix are excluded or shown last.
+
+Rationale: across many runs, the failure library accumulates entries with contradicting
+hypotheses — some where the fix worked, some where it did not. Passing all of them
+equally to the LLM creates contradicting context that degrades diagnosis quality.
+Weighting by proven outcome ensures the Diagnosis Agent reasons from validated evidence
+rather than from a mix of confirmed and unconfirmed hypotheses.
+
+Implementation: in the Diagnosis Agent, after `library.retrieve_similar()`:
+
+```python
+similar = library.retrieve_similar(signal, k=5)
+# Sort by proven outcome — failures with working fixes ranked first
+similar.sort(key=lambda s: s.pass_rate_delta or 0.0, reverse=True)
+# Only pass signals where a fix was confirmed
+grounded = [s for s in similar if s.pass_rate_delta and s.pass_rate_delta > 0][:3]
+```
