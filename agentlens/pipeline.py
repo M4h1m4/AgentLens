@@ -1,7 +1,11 @@
-"""Pipeline utilities — functions that wire together multiple AgentLens components.
+"""Pipeline orchestration helpers — glue between AgentLens components.
 
-These helpers are called at the orchestration layer (CLI or integration tests)
-after individual agents have completed their work.
+After the Improvement Agent promotes a fix, this module handles writing the
+proven hypothesis back to the FailureLibrary so future Diagnosis Agent runs
+reason from ground truth rather than the original weak hypothesis.
+
+Design decision D8.1: overwrite the stored diagnosis with the proven fix.
+See DESIGN_DECISIONS.md for the rationale.
 """
 
 from __future__ import annotations
@@ -13,33 +17,38 @@ from agentlens.rag.library import FailureLibrary
 def update_library_after_improvement(
     library: FailureLibrary,
     trace_id: str,
-    result: ImprovementResult,
+    improvement_result: ImprovementResult,
 ) -> None:
-    """Write the improvement outcome back into the failure library.
+    """Overwrite the stored diagnosis with the proven hypothesis.
 
-    If the improvement was promoted (fix confirmed by Wilson CI + no regressions),
-    overwrite the stored signal's weak initial hypothesis with the proven fix.
-    If not promoted, leave the library unchanged — an unconfirmed attempt is not
-    evidence of a fix.
+    Called by the Day 11 CLI after ImprovementAgent.improve() returns a
+    promoted result. The original diagnosis stored alongside the FailureSignal
+    was a weak LLM hypothesis. Once the Improvement Agent has found a fix that
+    is statistically confirmed (Wilson CIs non-overlapping, no regressions),
+    the hypothesis IS the ground truth — overwrite it so future retrievals
+    return the proven explanation, not the speculative one.
 
-    Design decision D8.1: only promoted fixes update the library. This keeps the
-    library as a source of ground truth rather than speculation.
+    Only runs when improvement_result.promoted is True. No-op otherwise,
+    because an unpromoted result has no confirmed root cause to store.
 
     Args:
-        library:   The FailureLibrary to update.
-        trace_id:  The trace_id of the stored FailureSignal to update.
-        result:    The ImprovementResult from ImprovementAgent.improve().
+        library:           FailureLibrary instance (ChromaDB-backed).
+        trace_id:          Trace ID used when the FailureSignal was originally
+                           stored (matches the eval run that surfaced the failure).
+        improvement_result: Result from ImprovementAgent.improve(). Must have
+                            promoted=True for any write to occur.
     """
-    if not result.promoted:
+    if not improvement_result.promoted:
         return
 
     pass_rate_delta = (
-        result.variant_eval.pass_rate - result.baseline_eval.pass_rate
+        improvement_result.variant_eval.pass_rate
+        - improvement_result.baseline_eval.pass_rate
     )
 
     library.update_diagnosis(
         trace_id=trace_id,
-        diagnosis=result.hypothesis,
-        fix_applied=result.hypothesis,
+        diagnosis=improvement_result.hypothesis,   # proven ground truth
+        fix_applied=improvement_result.hypothesis,
         pass_rate_delta=pass_rate_delta,
     )

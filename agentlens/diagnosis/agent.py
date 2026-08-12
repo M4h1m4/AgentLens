@@ -105,15 +105,44 @@ def _build_eval_context(failure_mode: str, cases: list[CaseResult]) -> str:
     return "\n".join(lines)
 
 
+def _filter_and_rank_similar(similar: list[FailureSignal]) -> list[FailureSignal]:
+    """Rank retrieved signals by proven outcome, exclude unresolved ones.
+
+    Signals where a fix was confirmed (pass_rate_delta > 0) are ranked first
+    and are the only ones passed to the LLM as grounding evidence. Signals
+    with no proven fix are excluded — they show a failure pattern but provide
+    no actionable evidence and can contradict proven fixes.
+
+    See design decision D8.2.
+    """
+    grounded = [s for s in similar if s.pass_rate_delta and s.pass_rate_delta > 0]
+    grounded.sort(key=lambda s: s.pass_rate_delta or 0.0, reverse=True)
+    return grounded[:3]
+
+
 def _build_past_context(similar: list[FailureSignal]) -> str:
-    """Summarise the top-k similar past failures for the LLM."""
+    """Summarise the top-k similar past failures for the LLM.
+
+    Only receives signals that have a proven fix (filtered by
+    _filter_and_rank_similar before this is called). Each entry surfaces
+    the prior diagnosis, what fix was applied, and how much it improved
+    the pass rate — giving the LLM concrete historical evidence to reason
+    from rather than unresolved hypotheses.
+    """
     if not similar:
-        return "PAST SIMILAR CASES: None found in failure library."
-    lines = ["PAST SIMILAR CASES (most similar first):"]
+        return (
+            "PAST SIMILAR CASES: None found with a proven fix. "
+            "Base your diagnosis on the MAST taxonomy and the eval evidence above."
+        )
+    lines = ["PAST SIMILAR CASES (ranked by proven pass rate improvement):"]
     for i, sig in enumerate(similar, 1):
         lines.append(f"\n  [{i}] {sig.summary}")
         if sig.diagnosis:
             lines.append(f"      Prior diagnosis: {sig.diagnosis}")
+        if sig.fix_applied:
+            lines.append(f"      Fix that worked: {sig.fix_applied}")
+        if sig.pass_rate_delta is not None:
+            lines.append(f"      Pass rate improvement: +{sig.pass_rate_delta:.0%}")
     return "\n".join(lines)
 
 
@@ -222,12 +251,18 @@ class DiagnosisAgent:
         cases: list[CaseResult],
         eval_id: str,
     ) -> Diagnosis:
-        # Retrieve similar past failures for grounding
+        # Retrieve similar past failures for grounding.
+        # retrieve_similar returns up to k semantically similar signals.
+        # _filter_and_rank_similar then keeps only the ones where a fix was
+        # confirmed (pass_rate_delta > 0), ranked by improvement magnitude.
+        # This prevents contradicting unresolved hypotheses from reaching the LLM.
+        # See design decisions D8.1 and D8.2.
         similar: list[FailureSignal] = []
         if self._library is not None:
             signal = _failure_signal_from_cases(failure_mode, cases, eval_id)
             try:
-                similar = self._library.retrieve_similar(signal, k=self._k)
+                raw = self._library.retrieve_similar(signal, k=self._k)
+                similar = _filter_and_rank_similar(raw)
             except Exception:
                 similar = []  # library unavailable — degrade gracefully
 
@@ -244,6 +279,6 @@ class DiagnosisAgent:
             evidence=llm_output.evidence,
             suggested_fix=llm_output.suggested_fix,
             confidence=llm_output.confidence,
-            similar_past_count=len(similar),
+            similar_past_count=len(similar),  # count of proven past fixes, not raw retrieved
             case_ids=[c.case_id for c in cases],
         )
