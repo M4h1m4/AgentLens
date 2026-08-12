@@ -43,13 +43,19 @@ def setup_otel(
     Returns:
         The configured TracerProvider.
     """
-    provider = TracerProvider()
-
     if exporter is None:
         from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
         ep = endpoint or os.environ.get("AGENTLENS_OTLP_ENDPOINT", PHOENIX_OTLP_ENDPOINT)
         exporter = OTLPSpanExporter(endpoint=ep)
 
+    existing = trace.get_tracer_provider()
+    if isinstance(existing, TracerProvider):
+        # A provider is already set (e.g. a previous test module called setup_otel).
+        # Add the new exporter directly to it so spans reach this exporter too.
+        existing.add_span_processor(SimpleSpanProcessor(exporter))
+        return existing
+
+    provider = TracerProvider()
     provider.add_span_processor(SimpleSpanProcessor(exporter))
     trace.set_tracer_provider(provider)
     return provider
